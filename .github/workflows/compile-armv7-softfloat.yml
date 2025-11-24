@@ -1,4 +1,4 @@
-name: Compile for ARMv7 (Minimal Softfloat)
+name: Compile NPC and Build IPK
 
 on:
   push:
@@ -12,37 +12,73 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        # 若需编译特定版本，请取消下方注释并修改标签
-        # with:
-        #   ref: 'v0.33.11'
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'  # 使用较稳定的版本以确保兼容性
+          go-version: '1.24'
           cache: true
 
       - name: Compile NPC (Client) for ARMv7
         run: |
-          # 关键改动：使用 GOARM=5 来禁用 Thumb 指令集并使用软浮点
           export GOOS=linux
           export GOARCH=arm
           export GOARM=5
           export CGO_ENABLED=0
 
-          # 编译 NPC，移除了无效的 -mthumb=false 参数
           go build -tags=softfloat \
                    -ldflags "-s -w -extldflags -static" \
                    -o npc_linux_armv7_minimal ./cmd/npc/npc.go
 
-          # 打包 NPC 和配置文件
-          mkdir -p npc_dist
-          cp npc_linux_armv7_minimal npc_dist/npc
-          cp -r conf/npc.conf conf/multi_account.conf npc_dist/
-          tar -czvf npc_linux_armv7_minimal.tar.gz -C npc_dist .
+          mkdir -p npc_dist/usr/bin
+          mkdir -p npc_dist/usr/lib/nps/conf
+          cp npc_linux_armv7_minimal npc_dist/usr/bin/npc
+          cp -r conf/npc.conf conf/multi_account.conf npc_dist/usr/lib/nps/conf/
+          tar -czvf npc-linux-armv7-minimal.tar.gz -C npc_dist .
 
-      - name: Upload NPC Artifact
+      - name: Install IPK Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ipkg-utils
+
+      - name: Create IPK Package Structure
+        run: |
+          PKG_NAME="npc"
+          PKG_VERSION="0.33.11"
+          PKG_RELEASE="1"
+          PKG_ARCH="arm_cortex-a9"  # 修改为此处
+
+          mkdir -p "${PKG_NAME}_ipk/control"
+          mkdir -p "${PKG_NAME}_ipk/data"
+
+          cp -r npc_dist/* "${PKG_NAME}_ipk/data/"
+
+          cat > "${PKG_NAME}_ipk/control/control" << EOF
+          Package: ${PKG_NAME}
+          Version: ${PKG_VERSION}-${PKG_RELEASE}
+          Architecture: ${PKG_ARCH}
+          Maintainer: Your Name <your.email@example.com>
+          Section: net
+          Priority: optional
+          Description: NPS Client (NPC) - Fast reverse proxy (Custom Compiled)
+           This package contains the client program for the NPS reverse proxy.
+           It allows you to expose intranet services to the public network.
+           Custom built for ARMv7 with softfloat support.
+          EOF
+
+      - name: Build IPK Package
+        run: |
+          PKG_NAME="npc"
+          ipkg-build -o root -g root "${PKG_NAME}_ipk" .
+
+      - name: Upload NPC Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: npc-linux-armv7-minimal
-          path: npc_linux_armv7_minimal.tar.gz
+          name: npc-linux-armv7-minimal-binary
+          path: npc-linux-armv7-minimal.tar.gz
+
+      - name: Upload IPK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npc-openwrt-ipk
+          path: "*.ipk"
