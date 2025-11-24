@@ -38,17 +38,14 @@ jobs:
 
       - name: Install IPK Build Tools (ipkg-utils)
         run: |
-          # 添加 OpenWRT 的软件源（以 23.05 版本为例）
-          echo "deb http://downloads.openwrt.org/releases/23.05.0/packages/arm_cortex-a9_vfpv3-d16/base/ /" | sudo tee /etc/apt/sources.list.d/openwrt.list
-          
-          # 导入 OpenWRT 的 GPG 密钥
-          wget -qO - https://downloads.openwrt.org/releases/23.05.0.asc | sudo apt-key add -
-          
-          # 更新软件源列表
-          sudo apt-get update
-          
-          # 安装 ipkg-utils
-          sudo apt-get install -y ipkg-utils
+          # 添加 Debian Buster 源（trusted=yes 跳过GPG验证）
+          echo "deb [trusted=yes] http://deb.debian.org/debian buster main" | sudo tee /etc/apt/sources.list.d/debian-buster.list
+          # 更新源并允许版本信息变更
+          sudo apt-get update --allow-releaseinfo-change -y
+          # 强制安装 ipkg-utils
+          sudo apt-get install -y ipkg-utils --force-yes
+          # 清理临时源
+          sudo rm /etc/apt/sources.list.d/debian-buster.list
 
       - name: Create IPK Package Structure
         run: |
