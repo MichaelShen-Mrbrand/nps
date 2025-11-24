@@ -38,13 +38,16 @@ jobs:
 
       - name: Install IPK Build Tools (ipkg-utils)
         run: |
-          # 添加 Debian Buster 源（trusted=yes 跳过GPG验证）
-          echo "deb [trusted=yes] http://deb.debian.org/debian buster main" | sudo tee /etc/apt/sources.list.d/debian-buster.list
-          # 更新源并允许版本信息变更
-          sudo apt-get update --allow-releaseinfo-change -y
-          # 强制安装 ipkg-utils
-          sudo apt-get install -y ipkg-utils --force-yes
-          # 清理临时源
+          # 添加 Debian Buster 归档源
+          echo "deb [trusted=yes] http://archive.debian.org/debian buster main" | sudo tee /etc/apt/sources.list.d/debian-buster.list
+          
+          # 更新源列表，忽略证书错误和过期警告
+          sudo apt-get update -o Acquire::Check-Valid-Until=false -o Acquire::AllowInsecureRepositories=true -y
+          
+          # 安装 ipkg-utils
+          sudo apt-get install -y ipkg-utils
+          
+          # 移除临时添加的源
           sudo rm /etc/apt/sources.list.d/debian-buster.list
 
       - name: Create IPK Package Structure
