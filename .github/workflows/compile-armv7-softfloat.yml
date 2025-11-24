@@ -12,34 +12,36 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        # 若需编译 v0.33.11，取消下方注释
+        # 若需编译特定版本，请取消下方注释并修改标签
         # with:
         #   ref: 'v0.33.11'
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'  # 降低 Go 版本，减少对新指令的依赖（关键！）
+          go-version: '1.24'  # 使用较稳定的版本以确保兼容性
           cache: true
 
-      - name: Compile NPC (Minimal Softfloat)
+      - name: Compile NPC (Client) for ARMv7
         run: |
+          # 关键改动：使用 GOARM=5 来禁用 Thumb 指令集并使用软浮点
           export GOOS=linux
           export GOARCH=arm
-          export GOARM=6  # 软浮点
+          export GOARM=5
           export CGO_ENABLED=0
-          # 关键新增：-tags=softfloat 强制禁用硬件浮点；-ldflags 禁用 thumb 指令
+
+          # 编译 NPC，移除了无效的 -mthumb=false 参数
           go build -tags=softfloat \
-                   -ldflags "-s -w -extldflags -static -mthumb=false" \
+                   -ldflags "-s -w -extldflags -static" \
                    -o npc_linux_armv7_minimal ./cmd/npc/npc.go
 
-          # 打包
+          # 打包 NPC 和配置文件
           mkdir -p npc_dist
           cp npc_linux_armv7_minimal npc_dist/npc
           cp -r conf/npc.conf conf/multi_account.conf npc_dist/
           tar -czvf npc_linux_armv7_minimal.tar.gz -C npc_dist .
 
-      - name: Upload Minimal NPC Artifact
+      - name: Upload NPC Artifact
         uses: actions/upload-artifact@v4
         with:
           name: npc-linux-armv7-minimal
