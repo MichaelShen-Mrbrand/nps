@@ -12,9 +12,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        # 如果需要编译特定版本，请取消注释并修改标签
-        # ref: 'v0.33.11'
+
 
     - name: Set up Go
       uses: actions/setup-go@v5
