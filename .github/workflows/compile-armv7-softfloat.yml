@@ -36,19 +36,16 @@ jobs:
           cp -r conf/npc.conf conf/multi_account.conf npc_dist/usr/lib/nps/conf/
           tar -czvf npc-linux-armv7-minimal.tar.gz -C npc_dist .
 
-      - name: Install IPK Build Tools (ipkg-utils)
+      - name: Get ipkg-build script (core tool for IPK packaging)
         run: |
-          # 添加 Debian Buster 归档源
-          echo "deb [trusted=yes] http://archive.debian.org/debian buster main" | sudo tee /etc/apt/sources.list.d/debian-buster.list
+          # 直接从 OpenWRT 官方仓库下载 ipkg-build 脚本（无需安装依赖）
+          wget -q --no-check-certificate https://raw.githubusercontent.com/openwrt/openwrt/master/tools/ipkg-utils/src/ipkg-build -O /tmp/ipkg-build
           
-          # 更新源列表，忽略证书错误和过期警告
-          sudo apt-get update -o Acquire::Check-Valid-Until=false -o Acquire::AllowInsecureRepositories=true -y
+          # 赋予执行权限
+          chmod +x /tmp/ipkg-build
           
-          # 安装 ipkg-utils
-          sudo apt-get install -y ipkg-utils
-          
-          # 移除临时添加的源
-          sudo rm /etc/apt/sources.list.d/debian-buster.list
+          # 复制到系统可执行目录（方便后续调用）
+          sudo cp /tmp/ipkg-build /usr/local/bin/
 
       - name: Create IPK Package Structure
         run: |
@@ -60,8 +57,10 @@ jobs:
           mkdir -p "${PKG_NAME}_ipk/control"
           mkdir -p "${PKG_NAME}_ipk/data"
 
+          # 复制编译产物到 IPK 数据目录（模拟 OpenWRT 根文件系统）
           cp -r npc_dist/* "${PKG_NAME}_ipk/data/"
 
+          # 创建 control 文件（IPK 包必需的元信息）
           cat > "${PKG_NAME}_ipk/control/control" << EOF
           Package: ${PKG_NAME}
           Version: ${PKG_VERSION}-${PKG_RELEASE}
@@ -78,6 +77,7 @@ jobs:
       - name: Build IPK Package
         run: |
           PKG_NAME="npc"
+          # 使用下载的 ipkg-build 脚本打包（指定所有者为 root:root）
           ipkg-build -o root -g root "${PKG_NAME}_ipk" .
 
       - name: Upload NPC Binary Artifact
