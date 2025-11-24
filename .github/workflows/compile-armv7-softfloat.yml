@@ -1,4 +1,4 @@
-name: Compile for ARMv7 (Softfloat)
+name: Compile for ARMv7 (Minimal Softfloat)
 
 on:
   push:
@@ -10,64 +10,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # 若需编译 v0.33.11，取消下方注释
+        # with:
+        #   ref: 'v0.33.11'
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'  # 降低 Go 版本，减少对新指令的依赖（关键！）
+          cache: true
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.25'
-        cache: true
+      - name: Compile NPC (Minimal Softfloat)
+        run: |
+          export GOOS=linux
+          export GOARCH=arm
+          export GOARM=6  # 软浮点
+          export CGO_ENABLED=0
+          # 关键新增：-tags=softfloat 强制禁用硬件浮点；-ldflags 禁用 thumb 指令
+          go build -tags=softfloat \
+                   -ldflags "-s -w -extldflags -static -mthumb=false" \
+                   -o npc_linux_armv7_minimal ./cmd/npc/npc.go
 
-    - name: Prepare build environment
-      run: |
-        # 安装交叉编译工具链（对于纯 Go 项目非必需，但为确保兼容性）
-        sudo apt-get update
-        sudo apt-get install -y gcc-arm-linux-gnueabihf
+          # 打包
+          mkdir -p npc_dist
+          cp npc_linux_armv7_minimal npc_dist/npc
+          cp -r conf/npc.conf conf/multi_account.conf npc_dist/
+          tar -czvf npc_linux_armv7_minimal.tar.gz -C npc_dist .
 
-    - name: Compile NPC (Client) for ARMv7 Softfloat
-      run: |
-        # 关键改动：使用 GOARM=6 以生成软浮点代码，避免 vfp 指令
-        export GOOS=linux
-        export GOARCH=arm
-        export GOARM=6  # <--- 核心修正点
-        export CGO_ENABLED=0
-
-        # 编译 NPC
-        go build -ldflags "-s -w -extldflags -static" -o npc_linux_armv7_softfloat ./cmd/npc/npc.go
-
-        # 打包 NPC 和配置文件
-        mkdir -p npc_dist
-        cp npc_linux_armv7_softfloat npc_dist/npc
-        cp -r conf/npc.conf conf/multi_account.conf npc_dist/
-        tar -czvf npc_linux_armv7_softfloat.tar.gz -C npc_dist .
-
-    - name: Compile NPS (Server) for ARMv7 Softfloat
-      run: |
-        # 关键改动：使用 GOARM=6 以生成软浮点代码，避免 vfp 指令
-        export GOOS=linux
-        export GOARCH=arm
-        export GOARM=6  # <--- 核心修正点
-        export CGO_ENABLED=0
-
-        # 编译 NPS
-        go build -ldflags "-s -w -extldflags -static" -o nps_linux_armv7_softfloat ./cmd/nps/nps.go
-
-        # 打包 NPS 和配置文件、网页资源
-        mkdir -p nps_dist
-        cp nps_linux_armv7_softfloat nps_dist/nps
-        cp -r conf/nps.conf web/ nps_dist/
-        tar -czvf nps_linux_armv7_softfloat.tar.gz -C nps_dist .
-
-    - name: Upload NPC Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: npc-linux-armv7-softfloat
-        path: npc_linux_armv7_softfloat.tar.gz
-
-    - name: Upload NPS Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: nps-linux-armv7-softfloat
-        path: nps_linux_armv7_softfloat.tar.gz
+      - name: Upload Minimal NPC Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npc-linux-armv7-minimal
+          path: npc_linux_armv7_minimal.tar.gz
